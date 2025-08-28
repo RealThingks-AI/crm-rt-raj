@@ -1,3 +1,4 @@
+
 import React from "react";
 import "./App.css";
 import { AuthProvider } from "./hooks/useAuth";
@@ -16,7 +17,7 @@ import Settings from "@/pages/Settings";
 import Notifications from "@/pages/Notifications";
 import NotFound from "@/pages/NotFound";
 import { CRMLayout } from "@/components/CRMLayout";
-import { SecurityEnhancedApp } from "@/components/SecurityEnhancedApp";
+import SecurityEnhancedApp from "@/components/SecurityEnhancedApp";
 import { useAuth } from "@/hooks/useAuth";
 
 const queryClient = new QueryClient();
