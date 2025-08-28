@@ -65,15 +65,21 @@ export default function Meetings() {
 
       if (teamsError) throw teamsError;
 
-      // Then save to database
+      // Then save to database with proper field mapping
       const { data, error } = await supabase
         .from('meetings')
         .insert({
-          ...meetingData,
-          organizer: user?.id,
-          created_by: user?.id,
+          title: meetingData.title!,
+          start_datetime: meetingData.start_datetime!,
+          end_datetime: meetingData.end_datetime!,
+          duration: meetingData.duration,
+          participants: meetingData.participants || [],
+          organizer: user?.id!,
+          status: meetingData.status || 'Scheduled',
           teams_meeting_link: teamsData?.meeting?.joinUrl,
           teams_meeting_id: teamsData?.meeting?.id,
+          description: meetingData.description,
+          created_by: user?.id!,
         })
         .select()
         .single();
@@ -103,7 +109,13 @@ export default function Meetings() {
       const { data, error } = await supabase
         .from('meetings')
         .update({
-          ...updateData,
+          title: updateData.title,
+          start_datetime: updateData.start_datetime,
+          end_datetime: updateData.end_datetime,
+          duration: updateData.duration,
+          participants: updateData.participants,
+          status: updateData.status,
+          description: updateData.description,
           modified_by: user?.id,
         })
         .eq('id', id)
