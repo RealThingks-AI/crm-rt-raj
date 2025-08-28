@@ -1,71 +1,155 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* CRM Design System - Professional & Modern */
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
 @layer base {
   :root {
-    /* Background & Surfaces */
-    --background: 240 10% 98%;
-    --surface: 0 0% 100%;
-    --surface-muted: 240 4.8% 95.9%;
-    --surface-accent: 221 83% 53%;
-    
-    /* Text Colors */
-    --foreground: 240 10% 3.9%;
-    --foreground-muted: 240 3.8% 46.1%;
-    --foreground-accent: 0 0% 100%;
-    
-    /* Primary Brand - Professional Blue */
-    --primary: 221 83% 53%;
-    --primary-foreground: 0 0% 100%;
-    --primary-hover: 221 83% 48%;
-    --primary-light: 221 83% 95%;
-    
-    /* Secondary - Success Green */
-    --secondary: 142 76% 36%;
-    --secondary-foreground: 0 0% 100%;
-    --secondary-hover: 142 76% 31%;
-    --secondary-light: 142 76% 95%;
-    
-    /* Accent - Warm Orange */
-    --accent: 25 95% 53%;
-    --accent-foreground: 0 0% 100%;
-    --accent-hover: 25 95% 48%;
-    --accent-light: 25 95% 95%;
-    
-    /* Status Colors */
-    --success: 142 76% 36%;
-    --success-foreground: 0 0% 100%;
-    --warning: 48 96% 53%;
-    --warning-foreground: 0 0% 0%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-    
-    /* Neutral Grays */
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 221 83% 53%;
-    
-    /* Card & Components */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --card-border: 240 5.9% 94%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* Light Blue theme with soft accents */
+    --primary: 204 94% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-variant: 204 94% 45%;
+
+    --secondary: 204 94% 95%;
+    --secondary-foreground: 204 100% 15%;
+
+    --muted: 204 100% 97%;
+    --muted-foreground: 204 15% 45%;
+
+    --accent: 204 100% 93%;
+    --accent-foreground: 204 100% 15%;
+
+    --destructive: 0 84.2% 55%;
+    --destructive-foreground: 210 40% 98%;
     
-    /* Sidebar */
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 221 83% 53%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 221 83% 53%;
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
     
-    --radius: 0.5rem;
+    --warning: 48 96% 53%;
+    --warning-foreground: 222.2 47.4% 11.2%;
+
+    --border: 204 100% 90%;
+    --input: 204 100% 90%;
+    --ring: 204 94% 50%;
+
+    --radius: 0.75rem;
+
+    /* Stage Colors */
+    --stage-lead: 239 84% 85%;
+    --stage-lead-foreground: 239 84% 25%;
+    --stage-discussions: 180 84% 85%;
+    --stage-discussions-foreground: 180 84% 25%;
+    --stage-qualified: 188 95% 85%;
+    --stage-qualified-foreground: 188 95% 25%;
+    --stage-rfq: 204 30% 85%;
+    --stage-rfq-foreground: 204 30% 25%;
+    --stage-offered: 25 95% 85%;
+    --stage-offered-foreground: 25 95% 25%;
+    --stage-won: 142 71% 85%;
+    --stage-won-foreground: 142 71% 25%;
+    --stage-lost: 0 84% 85%;
+    --stage-lost-foreground: 0 84% 25%;
+    --stage-dropped: 0 0% 85%;
+    --stage-dropped-foreground: 0 0% 25%;
+
+    /* Light Blue Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(204 94% 50%), hsl(204 94% 55%));
+    --gradient-header: linear-gradient(90deg, hsl(204 94% 50%), hsl(204 94% 45%));
+    --gradient-subtle: linear-gradient(180deg, hsl(204 100% 98%), hsl(204 100% 95%));
+    
+    /* Light Blue Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(204 94% 50% / 0.1);
+    --shadow-md: 0 4px 6px -1px hsl(204 94% 50% / 0.15), 0 2px 4px -1px hsl(204 94% 50% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(204 94% 50% / 0.15), 0 4px 6px -2px hsl(204 94% 50% / 0.1);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Dark theme using tested Tailwind palette */
+    --background: 222.2 84% 5.9%; /* #0f172a - slate-900 */
+    --foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+
+    --card: 215 28% 17%; /* #1e293b - slate-800 */
+    --card-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+
+    --popover: 215 28% 17%; /* #1e293b - slate-800 */
+    --popover-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+
+    --primary: 217.2 91.2% 59.8%; /* #3b82f6 - blue-500 */
+    --primary-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+    --primary-variant: 221.2 83.2% 53.3%; /* #2563eb - blue-600 */
+
+    --secondary: 215 25% 27%; /* #334155 - slate-700 */
+    --secondary-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+
+    --muted: 215 28% 17%; /* #1e293b - slate-800 */
+    --muted-foreground: 215 16% 47%; /* #64748b - slate-500 */
+
+    --accent: 217.2 91.2% 59.8%; /* #3b82f6 - blue-500 */
+    --accent-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+
+    --destructive: 0 62.8% 50%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --success: 142 71% 55%;
+    --success-foreground: 210 40% 98%;
+    
+    --warning: 48 96% 63%;
+    --warning-foreground: 222.2 47.4% 11.2%;
+
+    --border: 215 20% 35%; /* #475569 - slate-600 */
+    --input: 215 28% 17%; /* #1e293b - slate-800 */
+    --ring: 217.2 91.2% 59.8%; /* #3b82f6 - blue-500 */
+    
+    /* Enhanced sidebar colors for dark theme */
+    --sidebar-background: 215 28% 17%; /* #1e293b - slate-800 */
+    --sidebar-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+    --sidebar-primary: 217.2 91.2% 59.8%; /* #3b82f6 - blue-500 */
+    --sidebar-primary-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+    --sidebar-accent: 215 25% 27%; /* #334155 - slate-700 */
+    --sidebar-accent-foreground: 210 40% 98%; /* #f8fafc - slate-50 */
+    --sidebar-border: 215 20% 35%; /* #475569 - slate-600 */
+    --sidebar-ring: 217.2 91.2% 59.8%; /* #3b82f6 - blue-500 */
+  }
+}
+
+/* Animation utilities */
+.hover-scale {
+  @apply transition-transform duration-200 hover:scale-105;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -73,68 +157,68 @@
   * {
     @apply border-border;
   }
-  
+
   body {
     @apply bg-background text-foreground font-sans;
-  }
-  
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  ::-webkit-scrollbar-track {
-    @apply bg-muted;
-  }
-  
-  ::-webkit-scrollbar-thumb {
-    @apply bg-muted-foreground/30 rounded-full;
-  }
-  
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/50;
+    font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   }
 }
 
 @layer components {
-  /* CRM specific component styles */
-  .crm-card {
-    @apply bg-card border border-card-border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200;
+  .stage-card {
+    @apply rounded-2xl shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-[1.02];
   }
   
-  .crm-metric-card {
-    @apply crm-card p-6 space-y-2;
+  .stage-header {
+    @apply rounded-t-2xl p-4 font-semibold text-white;
+    background: var(--gradient-header);
   }
   
-  .crm-contact-card {
-    @apply crm-card p-4 hover:border-primary/20 cursor-pointer transition-colors duration-200;
+  .deal-card {
+    @apply bg-card rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border border-border/50;
   }
   
-  .crm-status-badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  .btn-primary {
+    @apply bg-primary text-primary-foreground rounded-lg px-4 py-2 font-medium transition-all duration-200 hover:bg-primary/90 hover:shadow-md;
   }
   
-  .crm-status-active {
-    @apply crm-status-badge bg-success/10 text-success;
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground rounded-lg px-4 py-2 font-medium transition-all duration-200 hover:bg-secondary/80;
   }
-  
-  .crm-status-inactive {
-    @apply crm-status-badge bg-muted text-muted-foreground;
+
+  /* Enhanced utility classes for consistency */
+  .card-hover {
+    @apply hover:shadow-md hover:scale-[1.01] transition-all duration-200;
   }
-  
-  .crm-status-hot {
-    @apply crm-status-badge bg-destructive/10 text-destructive;
+
+  .input-focus {
+    @apply focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all;
   }
-  
-  .crm-status-warm {
-    @apply crm-status-badge bg-accent/10 text-accent;
+
+  .button-scale {
+    @apply hover:scale-105 active:scale-95 transition-transform duration-150;
   }
-  
-  .crm-sidebar-item {
-    @apply flex items-center gap-3 px-3 py-2 rounded-md text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors duration-200;
+
+  /* Compact mobile utilities */
+  .compact-mobile {
+    @apply text-sm sm:text-base px-2 sm:px-4 py-1 sm:py-2;
   }
-  
-  .crm-sidebar-item-active {
-    @apply crm-sidebar-item bg-sidebar-primary text-sidebar-primary-foreground;
+
+  .text-hierarchy {
+    @apply font-bold text-foreground;
+  }
+
+  .text-sub {
+    @apply text-sm text-muted-foreground font-medium;
+  }
+
+  /* Responsive spacing */
+  .spacing-consistent {
+    @apply p-4 lg:p-6 gap-4 lg:gap-6;
+  }
+
+  /* Light blue hover effects */
+  .hover-light-blue {
+    @apply hover:bg-primary/5 hover:border-primary/20 transition-all duration-200;
   }
 }
