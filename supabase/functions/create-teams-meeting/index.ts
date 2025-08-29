@@ -93,6 +93,9 @@ const handler = async (req: Request): Promise<Response> => {
       // Create Teams event using specific user endpoint instead of /me
       const { title, startDateTime, endDateTime, participants, description } = requestData as CreateMeetingRequest;
 
+      // Ensure participants is an array, default to empty array if undefined
+      const safeParticipants = Array.isArray(participants) ? participants : [];
+
       const eventData = {
         subject: title,
         body: {
@@ -107,7 +110,7 @@ const handler = async (req: Request): Promise<Response> => {
           dateTime: endDateTime,
           timeZone: 'UTC',
         },
-        attendees: participants.map((email: string) => ({
+        attendees: safeParticipants.map((email: string) => ({
           emailAddress: {
             address: email,
             name: email.split('@')[0],
@@ -154,6 +157,9 @@ const handler = async (req: Request): Promise<Response> => {
       // Update Teams event
       const { title, startDateTime, endDateTime, participants, description, teamsEventId } = requestData as UpdateMeetingRequest;
 
+      // Ensure participants is an array, default to empty array if undefined
+      const safeParticipants = Array.isArray(participants) ? participants : [];
+
       const updateData = {
         subject: title,
         body: {
@@ -168,7 +174,7 @@ const handler = async (req: Request): Promise<Response> => {
           dateTime: endDateTime,
           timeZone: 'UTC',
         },
-        attendees: participants.map((email: string) => ({
+        attendees: safeParticipants.map((email: string) => ({
           emailAddress: {
             address: email,
             name: email.split('@')[0],
@@ -207,6 +213,10 @@ const handler = async (req: Request): Promise<Response> => {
     } else if (method === 'DELETE') {
       // Cancel Teams event
       const { teamsEventId } = requestData;
+
+      if (!teamsEventId) {
+        throw new Error('Teams event ID is required for cancellation');
+      }
 
       console.log('Cancelling Teams event:', teamsEventId);
 

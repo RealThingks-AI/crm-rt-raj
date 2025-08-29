@@ -86,6 +86,29 @@ export const MeetingsTable = ({ onEdit, refreshTrigger }: MeetingsTableProps) =>
 
   const handleStatusUpdate = async (meetingId: string, newStatus: 'Completed' | 'Cancelled') => {
     try {
+      const meeting = meetings.find(m => m.id === meetingId);
+      
+      // If cancelling and has Teams event, cancel it first
+      if (newStatus === 'Cancelled' && meeting?.teams_meeting_id) {
+        console.log('Cancelling Teams event for meeting:', meetingId);
+        
+        const { error: teamsError } = await supabase.functions.invoke('create-teams-meeting', {
+          body: {
+            teamsEventId: meeting.teams_meeting_id,
+          },
+        });
+
+        if (teamsError) {
+          console.error('Failed to cancel Teams event:', teamsError);
+          toast({
+            title: "Warning",
+            description: "Meeting updated locally but Teams event may not be cancelled",
+            variant: "destructive",
+          });
+        }
+      }
+
+      // Update the meeting status in database
       const { error } = await supabase
         .from('meetings')
         .update({ 
@@ -95,18 +118,6 @@ export const MeetingsTable = ({ onEdit, refreshTrigger }: MeetingsTableProps) =>
         .eq('id', meetingId);
 
       if (error) throw error;
-
-      // If cancelling, also cancel the Teams event
-      if (newStatus === 'Cancelled') {
-        const meeting = meetings.find(m => m.id === meetingId);
-        if (meeting?.teams_meeting_id) {
-          await supabase.functions.invoke('create-teams-meeting', {
-            body: {
-              teamsEventId: meeting.teams_meeting_id,
-            },
-          });
-        }
-      }
 
       toast({
         title: "Meeting Updated",
@@ -132,11 +143,17 @@ export const MeetingsTable = ({ onEdit, refreshTrigger }: MeetingsTableProps) =>
       
       // Cancel Teams event if exists
       if (meeting?.teams_meeting_id) {
-        await supabase.functions.invoke('create-teams-meeting', {
+        console.log('Deleting Teams event for meeting:', meetingId);
+        
+        const { error: teamsError } = await supabase.functions.invoke('create-teams-meeting', {
           body: {
             teamsEventId: meeting.teams_meeting_id,
           },
         });
+
+        if (teamsError) {
+          console.error('Failed to delete Teams event:', teamsError);
+        }
       }
 
       const { error } = await supabase
