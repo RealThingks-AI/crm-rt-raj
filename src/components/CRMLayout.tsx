@@ -1,16 +1,12 @@
 
-import { ReactNode } from "react";
+import { Outlet } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { NotificationBell } from "./NotificationBell";
 import { Button } from "./ui/button";
 import { User, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
-interface CRMLayoutProps {
-  children: ReactNode;
-}
-
-export const CRMLayout = ({ children }: CRMLayoutProps) => {
+export const CRMLayout = () => {
   const { user, signOut } = useAuth();
 
   return (
@@ -42,7 +38,7 @@ export const CRMLayout = ({ children }: CRMLayoutProps) => {
 
         {/* Main Content */}
         <main className="flex-1 p-6 overflow-auto">
-          {children}
+          <Outlet />
         </main>
       </div>
     </div>
