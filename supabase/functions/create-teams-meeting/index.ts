@@ -37,6 +37,24 @@ const handler = async (req: Request): Promise<Response> => {
       }
     );
 
+    // Get current user to use as organizer
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+
+    // Get user profile to get email
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    const userEmail = profile?.['Email ID'] || user.email;
+    if (!userEmail) {
+      throw new Error('User email not found');
+    }
+
     // Get Microsoft Graph credentials
     const clientId = Deno.env.get('MICROSOFT_GRAPH_CLIENT_ID');
     const clientSecret = Deno.env.get('MICROSOFT_GRAPH_CLIENT_SECRET');
@@ -72,7 +90,7 @@ const handler = async (req: Request): Promise<Response> => {
     const requestData = await req.json();
 
     if (method === 'POST') {
-      // Create Teams event
+      // Create Teams event using specific user endpoint instead of /me
       const { title, startDateTime, endDateTime, participants, description } = requestData as CreateMeetingRequest;
 
       const eventData = {
@@ -101,8 +119,10 @@ const handler = async (req: Request): Promise<Response> => {
       };
 
       console.log('Creating Teams event with data:', JSON.stringify(eventData, null, 2));
+      console.log('Using organizer email:', userEmail);
 
-      const createResponse = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+      // Use the specific user's endpoint instead of /me
+      const createResponse = await fetch(`https://graph.microsoft.com/v1.0/users/${userEmail}/events`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -159,7 +179,7 @@ const handler = async (req: Request): Promise<Response> => {
 
       console.log('Updating Teams event:', teamsEventId);
 
-      const updateResponse = await fetch(`https://graph.microsoft.com/v1.0/me/events/${teamsEventId}`, {
+      const updateResponse = await fetch(`https://graph.microsoft.com/v1.0/users/${userEmail}/events/${teamsEventId}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -190,7 +210,7 @@ const handler = async (req: Request): Promise<Response> => {
 
       console.log('Cancelling Teams event:', teamsEventId);
 
-      const deleteResponse = await fetch(`https://graph.microsoft.com/v1.0/me/events/${teamsEventId}`, {
+      const deleteResponse = await fetch(`https://graph.microsoft.com/v1.0/users/${userEmail}/events/${teamsEventId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
