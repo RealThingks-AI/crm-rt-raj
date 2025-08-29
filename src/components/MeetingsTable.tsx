@@ -19,7 +19,7 @@ interface Meeting {
   duration: number;
   participants: string[];
   organizer: string;
-  status: 'Scheduled' | 'Completed' | 'Cancelled';
+  status: string; // Changed from union type to string to match database
   teams_meeting_link?: string;
   teams_meeting_id?: string;
   description?: string;
