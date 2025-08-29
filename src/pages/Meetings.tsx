@@ -1,9 +1,49 @@
 
-import { Calendar, Plus, Users, Clock } from "lucide-react";
+import { useState } from "react";
+import { Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MeetingForm } from "@/components/MeetingForm";
+import { MeetingsTable } from "@/components/MeetingsTable";
+import { MeetingsImportExport } from "@/components/MeetingsImportExport";
 
 const Meetings = () => {
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleCreateSuccess = () => {
+    setShowCreateForm(false);
+    setEditingMeeting(null);
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleEdit = (meeting: any) => {
+    setEditingMeeting(meeting);
+    setShowCreateForm(true);
+  };
+
+  const handleCancel = () => {
+    setShowCreateForm(false);
+    setEditingMeeting(null);
+  };
+
+  const handleImportComplete = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  if (showCreateForm) {
+    return (
+      <div className="space-y-6">
+        <MeetingForm
+          onSuccess={handleCreateSuccess}
+          onCancel={handleCancel}
+          editingMeeting={editingMeeting}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -11,92 +51,36 @@ const Meetings = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Meetings</h1>
           <p className="text-muted-foreground">
-            Manage and schedule your meetings
+            Schedule and manage meetings with Microsoft Teams integration
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setShowCreateForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          New Meeting
+          Create Meeting
         </Button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Meetings</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">
-              +2 from yesterday
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">This Week</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">
-              +4 from last week
-            </p>
-          </CardContent>
-        </Card>
+      {/* Main Content */}
+      <Tabs defaultValue="meetings" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="meetings">All Meetings</TabsTrigger>
+          <TabsTrigger value="import-export" className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Import/Export
+          </TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Participants</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">48</div>
-            <p className="text-xs text-muted-foreground">
-              Total this month
-            </p>
-          </CardContent>
-        </Card>
+        <TabsContent value="meetings" className="space-y-4">
+          <MeetingsTable 
+            onEdit={handleEdit}
+            refreshTrigger={refreshTrigger}
+          />
+        </TabsContent>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">95%</div>
-            <p className="text-xs text-muted-foreground">
-              +5% from last month
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Meetings Content */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Upcoming Meetings</CardTitle>
-          <CardDescription>
-            Your scheduled meetings and appointments
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-12">
-            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No meetings scheduled</h3>
-            <p className="text-muted-foreground mb-4">
-              Get started by creating your first meeting
-            </p>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Schedule Meeting
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        <TabsContent value="import-export" className="space-y-4">
+          <MeetingsImportExport onImportComplete={handleImportComplete} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
