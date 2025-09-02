@@ -1,16 +1,19 @@
 
 import { useState } from "react";
-import { Plus, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 import { MeetingForm } from "@/components/MeetingForm";
 import { MeetingsTable } from "@/components/MeetingsTable";
-import { MeetingsImportExport } from "@/components/MeetingsImportExport";
+import { useMeetingsImportExport } from "@/hooks/useMeetingsImportExport";
+import MeetingsHeader from "@/components/MeetingsHeader";
 
 const Meetings = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [statusFilter, setStatusFilter] = useState("Upcoming");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleCreateSuccess = () => {
     setShowCreateForm(false);
@@ -28,59 +31,80 @@ const Meetings = () => {
     setEditingMeeting(null);
   };
 
+  const { exportMeetings, isProcessing } = useMeetingsImportExport();
+
   const handleImportComplete = () => {
     setRefreshTrigger(prev => prev + 1);
   };
 
-  if (showCreateForm) {
-    return (
-      <div className="space-y-6">
-        <MeetingForm
-          onSuccess={handleCreateSuccess}
-          onCancel={handleCancel}
-          editingMeeting={editingMeeting}
-        />
-      </div>
-    );
-  }
+  const handleImport = () => {
+    // TODO: Add import functionality with file picker
+    console.log('Import functionality - file picker to be implemented');
+  };
+
+  const handleExport = async () => {
+    await exportMeetings();
+  };
+
+  const handleBulkDelete = () => {
+    // TODO: Add bulk delete functionality
+    console.log('Bulk delete functionality coming soon');
+  };
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Meetings</h1>
-          <p className="text-muted-foreground">
-            Schedule and manage meetings with Microsoft Teams integration
-          </p>
+      <MeetingsHeader 
+        onAddMeeting={() => setShowCreateForm(true)} 
+        onImport={handleImport} 
+        onExport={handleExport} 
+        onDelete={handleBulkDelete} 
+      />
+
+      {/* Search and Filter Section - Match Leads module layout */}
+      <div className="flex items-center gap-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Search meetings..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 w-80"
+          />
         </div>
-        <Button onClick={() => setShowCreateForm(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Meeting
-        </Button>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Upcoming">Upcoming</SelectItem>
+            <SelectItem value="Completed">Completed</SelectItem>
+            <SelectItem value="Cancelled">Cancelled</SelectItem>
+            <SelectItem value="All">All Meetings</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Main Content */}
-      <Tabs defaultValue="meetings" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="meetings">All Meetings</TabsTrigger>
-          <TabsTrigger value="import-export" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Import/Export
-          </TabsTrigger>
-        </TabsList>
+      <MeetingsTable 
+        onEdit={handleEdit} 
+        refreshTrigger={refreshTrigger} 
+        statusFilter={statusFilter}
+        searchQuery={searchQuery}
+      />
 
-        <TabsContent value="meetings" className="space-y-4">
-          <MeetingsTable 
-            onEdit={handleEdit}
-            refreshTrigger={refreshTrigger}
-          />
-        </TabsContent>
-
-        <TabsContent value="import-export" className="space-y-4">
-          <MeetingsImportExport onImportComplete={handleImportComplete} />
-        </TabsContent>
-      </Tabs>
+      {/* Meeting Form Modal */}
+      <MeetingForm 
+        open={showCreateForm}
+        onOpenChange={(open) => {
+          setShowCreateForm(open);
+          if (!open) {
+            setEditingMeeting(null);
+          }
+        }}
+        onSuccess={handleCreateSuccess}
+        editingMeeting={editingMeeting}
+      />
     </div>
   );
 };

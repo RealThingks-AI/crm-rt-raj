@@ -1,219 +1,440 @@
-
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { addMinutes, format } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { CalendarIcon, Clock, Users, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { CalendarIcon, Clock, Users, Globe, Check, ChevronsUpDown, AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  IANA_TIMEZONES,
+  DEFAULT_TIMEZONE,
+  getBrowserTimezone,
+  convertLocalToUTC,
+  convertUTCToLocal,
+  isLocalDateTimeInPast,
+  getNextAvailableTimeSlot,
+  getAvailableTimeSlots,
+  checkMeetingConflicts,
+  suggestNextAvailableSlot,
+  formatDateTimeWithTimezone,
+  generateTimezoneDisplay
+} from '@/utils/timezoneUtils';
 
 const meetingSchema = z.object({
   title: z.string().min(1, 'Title is required'),
-  startDateTime: z.string().min(1, 'Start date and time is required'),
-  endDateTime: z.string().min(1, 'End date and time is required'),
-  participants: z.array(z.string().email('Invalid email format')).min(1, 'At least one participant is required'),
+  timezone: z.string().min(1, 'Timezone is required'),
+  startDate: z.date({ required_error: 'Start date is required' }),
+  startTime: z.string().min(1, 'Start time is required'),
+  duration: z.string().min(1, 'Duration is required'),
+  participant: z.string().min(1, 'Participant is required'),
   description: z.string().optional(),
-}).refine((data) => {
-  const start = new Date(data.startDateTime);
-  const end = new Date(data.endDateTime);
-  return end > start;
-}, {
-  message: "End time must be after start time",
-  path: ["endDateTime"],
 });
 
 type MeetingFormData = z.infer<typeof meetingSchema>;
 
 interface MeetingFormProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  onCancel: () => void;
   editingMeeting?: any;
 }
 
-export const MeetingForm = ({ onSuccess, onCancel, editingMeeting }: MeetingFormProps) => {
+const durationOptions = [
+  { label: '30 minutes', value: '30' },
+  { label: '1 hour', value: '60' },
+];
+
+export const MeetingForm = ({ open, onOpenChange, onSuccess, editingMeeting }: MeetingFormProps) => {
   const { toast } = useToast();
-  const [participantInput, setParticipantInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availableLeads, setAvailableLeads] = useState<any[]>([]);
+  const [participantOpen, setParticipantOpen] = useState(false);
+  const [existingMeetings, setExistingMeetings] = useState<any[]>([]);
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const [suggestedSlot, setSuggestedSlot] = useState<{ date: Date; time: string } | null>(null);
+
+  const detectedTimezone = getBrowserTimezone();
 
   const form = useForm<MeetingFormData>({
     resolver: zodResolver(meetingSchema),
     defaultValues: {
       title: '',
-      startDateTime: '',
-      endDateTime: '',
-      participants: [],
+      timezone: DEFAULT_TIMEZONE, // Set default to EET
+      startDate: new Date(),
+      startTime: getNextAvailableTimeSlot(),
+      duration: '30',
+      participant: '',
       description: '',
     },
   });
 
-  const { watch, setValue, getValues } = form;
-  const participants = watch('participants') || [];
+  const watchedDate = form.watch('startDate');
+  const watchedTime = form.watch('startTime');
+  const watchedTimezone = form.watch('timezone');
+  const watchedDuration = form.watch('duration');
 
+  // Fetch existing meetings for conflict detection
   useEffect(() => {
-    if (editingMeeting) {
-      const startDate = new Date(editingMeeting.start_datetime);
-      const endDate = new Date(editingMeeting.end_datetime);
-      
-      // Format datetime for input (YYYY-MM-DDTHH:MM)
-      const formatDateTime = (date: Date) => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        return `${year}-${month}-${day}T${hours}:${minutes}`;
-      };
+    const fetchMeetings = async () => {
+      const { data } = await supabase
+        .from('meetings')
+        .select('id, start_time_utc, end_time_utc, start_datetime, end_datetime, title')
+        .eq('status', 'Scheduled');
+      setExistingMeetings(data || []);
+    };
+    if (open) fetchMeetings();
+  }, [open]);
 
-      form.reset({
-        title: editingMeeting.title,
-        startDateTime: formatDateTime(startDate),
-        endDateTime: formatDateTime(endDate),
-        participants: editingMeeting.participants || [],
-        description: editingMeeting.description || '',
-      });
-    }
-  }, [editingMeeting, form]);
+  // Fetch leads for participants dropdown
+  useEffect(() => {
+    const fetchLeads = async () => {
+      const { data: leads, error } = await supabase
+        .from('leads')
+        .select('id, lead_name, email, company_name')
+        .eq('lead_status', 'New')
+        .not('email', 'is', null);
+      if (!error && leads) setAvailableLeads(leads);
+    };
+    fetchLeads();
+  }, []);
 
-  const addParticipant = () => {
-    if (participantInput.trim() && participantInput.includes('@')) {
-      const email = participantInput.trim().toLowerCase();
-      const currentParticipants = getValues('participants') || [];
-      if (!currentParticipants.includes(email)) {
-        setValue('participants', [...currentParticipants, email]);
-        setParticipantInput('');
+  // Check for conflicts when time/date changes
+  useEffect(() => {
+    if (watchedDate && watchedTime && watchedTimezone && watchedDuration) {
+      const duration = parseInt(watchedDuration);
+      try {
+        const { utcStart } = convertLocalToUTC(watchedDate, watchedTime, watchedTimezone);
+        const utcEnd = addMinutes(utcStart, duration);
+        
+        const hasConflict = checkMeetingConflicts(
+          existingMeetings,
+          utcStart,
+          utcEnd,
+          editingMeeting?.id
+        );
+        
+        if (hasConflict) {
+          setConflictWarning('This time slot conflicts with an existing meeting.');
+          const suggested = suggestNextAvailableSlot(existingMeetings, utcStart, duration, watchedTimezone);
+          setSuggestedSlot(suggested);
+        } else {
+          setConflictWarning(null);
+          setSuggestedSlot(null);
+        }
+      } catch (error) {
+        console.error('Error checking conflicts:', error);
       }
     }
-  };
+  }, [watchedDate, watchedTime, watchedTimezone, watchedDuration, existingMeetings, editingMeeting?.id]);
 
-  const removeParticipant = (email: string) => {
-    const currentParticipants = getValues('participants') || [];
-    setValue('participants', currentParticipants.filter(p => p !== email));
-  };
+  // Pre-fill form when editing
+  useEffect(() => {
+    if (editingMeeting && open) {
+      const handleEditingMeeting = async () => {
+        try {
+          // Use start_time_utc (new field)
+          const utcStartDate = new Date(editingMeeting.start_time_utc);
+          const utcEndDate = new Date(editingMeeting.end_time_utc);
+          const duration = editingMeeting.duration || Math.round((utcEndDate.getTime() - utcStartDate.getTime()) / (1000 * 60));
+          
+          // Use stored timezone or browser timezone
+          const timezone = editingMeeting.time_zone || detectedTimezone;
+          
+          console.log('🔍 Meeting Form - Edit Mode Debug:', {
+            step: '1. Loading from Supabase',
+            storedUTCStart: editingMeeting.start_time_utc,
+            storedUTCEnd: editingMeeting.end_time_utc,
+            storedTimezone: editingMeeting.time_zone,
+            storedTimezoneDisplay: editingMeeting.time_zone_display
+          });
+          
+          // Convert back to local time
+          const { localDate, timeString } = convertUTCToLocal(utcStartDate, timezone);
+          
+          console.log('🔍 Meeting Form - Edit Mode Debug:', {
+            step: '2. Converted back to Local Time for Display',
+            convertedLocalDate: localDate.toDateString(),
+            convertedLocalTime: timeString,
+            targetTimezone: timezone,
+            note: 'User should see original local time they entered'
+          });
+          
+          const firstParticipant = editingMeeting.participants?.[0] || '';
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addParticipant();
+          form.reset({
+            title: editingMeeting.title,
+            timezone,
+            startDate: localDate,
+            startTime: timeString,
+            duration: duration.toString(),
+            participant: firstParticipant,
+            description: editingMeeting.description || '',
+          });
+        } catch (error) {
+          console.error('Failed to load meeting data:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load meeting data",
+            variant: "destructive",
+          });
+        }
+      };
+      
+      handleEditingMeeting();
+    } else if (!editingMeeting && open) {
+      // Reset form for new meeting
+      const today = new Date();
+      const nextSlot = getNextAvailableTimeSlot(today, detectedTimezone);
+      
+      form.reset({
+        title: '',
+        timezone: DEFAULT_TIMEZONE, // Use default EET
+        startDate: today,
+        startTime: nextSlot,
+        duration: '30',
+        participant: '',
+        description: '',
+      });
+    }
+  }, [editingMeeting, open, form, detectedTimezone, toast]);
+
+  // Update available time slots when date/timezone changes
+  useEffect(() => {
+    if (watchedDate && watchedTimezone) {
+      const availableSlots = getAvailableTimeSlots(watchedDate, watchedTimezone);
+      if (!availableSlots.includes(watchedTime)) {
+        const nextSlot = availableSlots[0] || getNextAvailableTimeSlot(watchedDate, watchedTimezone);
+        form.setValue('startTime', nextSlot);
+      }
+    }
+  }, [watchedDate, watchedTimezone, watchedTime, form]);
+
+  const handleSuggestedSlotAccept = () => {
+    if (suggestedSlot) {
+      form.setValue('startDate', suggestedSlot.date);
+      form.setValue('startTime', suggestedSlot.time);
+      setConflictWarning(null);
+      setSuggestedSlot(null);
     }
   };
 
   const onSubmit = async (data: MeetingFormData) => {
     setIsSubmitting(true);
-    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const startDateTime = new Date(data.startDateTime).toISOString();
-      const endDateTime = new Date(data.endDateTime).toISOString();
-
-      // Check if meeting is in the past
-      if (new Date(startDateTime) < new Date()) {
+      // Validate time is not in the past
+      if (isLocalDateTimeInPast(data.startDate, data.startTime, data.timezone)) {
         toast({
           title: "Invalid Date",
           description: "Cannot schedule meetings in the past",
           variant: "destructive",
         });
+        setIsSubmitting(false);
         return;
       }
 
-      let teamsResult;
-      
+      // Convert to UTC for storage
+      const duration = parseInt(data.duration);
+      const { utcStart } = convertLocalToUTC(data.startDate, data.startTime, data.timezone);
+      const utcEnd = addMinutes(utcStart, duration);
+
+      // Check for conflicts one more time
+      const hasConflict = checkMeetingConflicts(
+        existingMeetings,
+        utcStart,
+        utcEnd,
+        editingMeeting?.id
+      );
+
+      if (hasConflict && !conflictWarning) {
+        toast({
+          title: "Meeting Conflict",
+          description: "This time slot conflicts with an existing meeting",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const selectedLead = availableLeads.find(l => l.id === data.participant);
+      const participantEmail = selectedLead?.email || data.participant;
+      const participantEmails = [participantEmail];
+
+      // Debug logging for timezone conversion
+      console.log('🔍 Meeting Form - Timezone Conversion Debug:', {
+        step: '1. User Input (Local Time)',
+        localDate: data.startDate.toDateString(),
+        localTime: data.startTime,
+        timezone: data.timezone,
+        duration,
+      });
+
+      console.log('🔍 Meeting Form - Timezone Conversion Debug:', {
+        step: '2. Converted to UTC for Storage',
+        utcStartISO: utcStart.toISOString(),
+        utcEndISO: utcEnd.toISOString(),
+        note: 'These values will be stored in Supabase'
+      });
+
+      // Prepare meeting data for database
+      const meetingData = {
+        title: data.title,
+        description: data.description,
+        start_time_utc: utcStart.toISOString(),
+        end_time_utc: utcEnd.toISOString(),
+        time_zone: data.timezone,
+        time_zone_display: generateTimezoneDisplay(data.timezone),
+        duration,
+        participants: participantEmails,
+        organizer: user.id,
+        created_by: user.id,
+        modified_by: user.id,
+        status: 'Scheduled',
+      };
+
+      console.log('🔍 Meeting Form - Database Storage Debug:', {
+        step: '3. Final Meeting Data for Supabase',
+        start_time_utc: meetingData.start_time_utc,
+        end_time_utc: meetingData.end_time_utc,
+        time_zone: meetingData.time_zone,
+        time_zone_display: meetingData.time_zone_display
+      });
+
+      let meetingId: string;
+
       if (editingMeeting) {
         // Update existing meeting
-        if (editingMeeting.teams_meeting_id) {
-          // Update Teams event
-          teamsResult = await supabase.functions.invoke('create-teams-meeting', {
+        const { data: updatedMeeting, error } = await supabase
+          .from('meetings')
+          .update(meetingData)
+          .eq('id', editingMeeting.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        meetingId = editingMeeting.id;
+
+        // Update Teams meeting if it exists
+        if (editingMeeting.microsoft_event_id || editingMeeting.teams_meeting_id) {
+          try {
+            console.log('🔍 Meeting Form - Teams Update Debug:', {
+              step: '4. Updating Teams Meeting',
+              startDateTime: utcStart.toISOString(),
+              endDateTime: utcEnd.toISOString(),
+              teamsEventId: editingMeeting.microsoft_event_id || editingMeeting.teams_meeting_id
+            });
+
+            const { data: teamsResult, error: teamsError } = await supabase.functions.invoke('create-teams-meeting', {
+              body: {
+                operation: 'update',
+                title: data.title,
+                startDateTime: utcStart.toISOString(),
+                endDateTime: utcEnd.toISOString(),
+                participants: participantEmails,
+                description: data.description,
+                teamsEventId: editingMeeting.microsoft_event_id || editingMeeting.teams_meeting_id,
+              },
+            });
+
+            if (!teamsError && teamsResult?.success && teamsResult?.meetingLink) {
+              // Update meeting with new Teams link
+              await supabase
+                .from('meetings')
+                .update({ teams_meeting_link: teamsResult.meetingLink })
+                .eq('id', editingMeeting.id);
+            }
+          } catch (teamsError) {
+            console.error('Teams update failed:', teamsError);
+            toast({
+              title: "Warning",
+              description: "Meeting updated but Teams sync failed",
+              variant: "destructive",
+            });
+          }
+        }
+      } else {
+        // Create new meeting
+        const { data: newMeeting, error } = await supabase
+          .from('meetings')
+          .insert(meetingData)
+          .select()
+          .single();
+
+        if (error) throw error;
+        meetingId = newMeeting.id;
+
+        // Create Teams meeting
+        try {
+          console.log('🔍 Meeting Form - Teams Integration Debug:', {
+            step: '4. Sending to Teams Edge Function',
+            startDateTime: utcStart.toISOString(),
+            endDateTime: utcEnd.toISOString(),
+            note: 'UTC times sent to Teams for proper conversion'
+          });
+
+          const { data: teamsResult, error: teamsError } = await supabase.functions.invoke('create-teams-meeting', {
             body: {
               title: data.title,
-              startDateTime,
-              endDateTime,
-              participants: data.participants,
+              startDateTime: utcStart.toISOString(),
+              endDateTime: utcEnd.toISOString(),
+              participants: participantEmails,
               description: data.description,
-              teamsEventId: editingMeeting.teams_meeting_id,
             },
           });
 
-          if (teamsResult.error) {
-            console.error('Teams update error:', teamsResult.error);
+          if (!teamsError && teamsResult?.success) {
+            // Update meeting with Teams info
+            const teamsUpdateData: any = {
+              microsoft_event_id: teamsResult.eventId,
+            };
+            
+            // Use meetingLink (which includes fallback to webLink) or joinUrl
+            if (teamsResult.meetingLink || teamsResult.joinUrl) {
+              teamsUpdateData.teams_meeting_link = teamsResult.meetingLink || teamsResult.joinUrl;
+            }
+            
+            console.log('🔍 Updating meeting with Teams data:', teamsUpdateData);
+            
+            await supabase
+              .from('meetings')
+              .update(teamsUpdateData)
+              .eq('id', meetingId);
+          } else {
+            console.error('Teams integration failed:', teamsError || 'No result returned');
           }
-        }
-
-        // Update in database
-        const { error: updateError } = await supabase
-          .from('meetings')
-          .update({
-            title: data.title,
-            start_datetime: startDateTime,
-            end_datetime: endDateTime,
-            participants: data.participants,
-            description: data.description,
-            modified_by: user.id,
-          })
-          .eq('id', editingMeeting.id);
-
-        if (updateError) throw updateError;
-
-        toast({
-          title: "Meeting Updated",
-          description: "Meeting has been updated successfully",
-        });
-      } else {
-        // Create new Teams event
-        teamsResult = await supabase.functions.invoke('create-teams-meeting', {
-          body: {
-            title: data.title,
-            startDateTime,
-            endDateTime,
-            participants: data.participants,
-            description: data.description,
-          },
-        });
-
-        let teamsEventId = null;
-        let teamsLink = null;
-
-        if (teamsResult.data && !teamsResult.error) {
-          teamsEventId = teamsResult.data.eventId;
-          teamsLink = teamsResult.data.joinUrl || teamsResult.data.webLink;
-        } else {
-          console.error('Teams creation error:', teamsResult.error);
+        } catch (teamsError) {
+          console.error('Teams creation failed:', teamsError);
           toast({
-            title: "Teams Integration Warning",
-            description: "Meeting created but Teams link may not be available",
+            title: "Warning",
+            description: "Meeting created but Teams integration failed",
             variant: "destructive",
           });
         }
-
-        // Insert into database
-        const { error: insertError } = await supabase
-          .from('meetings')
-          .insert({
-            title: data.title,
-            start_datetime: startDateTime,
-            end_datetime: endDateTime,
-            participants: data.participants,
-            organizer: user.id,
-            created_by: user.id,
-            description: data.description,
-            teams_meeting_id: teamsEventId,
-            teams_meeting_link: teamsLink,
-          });
-
-        if (insertError) throw insertError;
-
-        toast({
-          title: "Meeting Created",
-          description: "Meeting has been created successfully",
-        });
       }
 
+      toast({
+        title: editingMeeting ? "Meeting Updated" : "Meeting Created",
+        description: editingMeeting 
+          ? "Meeting has been updated successfully"
+          : "Meeting has been created and synced with Teams",
+      });
+
       onSuccess();
+      onOpenChange(false);
     } catch (error: any) {
       console.error('Error saving meeting:', error);
       toast({
@@ -226,26 +447,34 @@ export const MeetingForm = ({ onSuccess, onCancel, editingMeeting }: MeetingForm
     }
   };
 
+  const availableTimeSlots = watchedDate && watchedTimezone 
+    ? getAvailableTimeSlots(watchedDate, watchedTimezone)
+    : [];
+
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CalendarIcon className="h-5 w-5" />
-          {editingMeeting ? 'Edit Meeting' : 'Create New Meeting'}
-        </CardTitle>
-        <CardDescription>
-          {editingMeeting ? 'Update meeting details' : 'Schedule a new meeting with Teams integration'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px]" aria-describedby="meeting-form-description">
+        <DialogHeader>
+          <DialogTitle>
+            {editingMeeting ? 'Edit Meeting' : 'Schedule New Meeting'}
+          </DialogTitle>
+        </DialogHeader>
+        <div id="meeting-form-description" className="sr-only">
+          {editingMeeting ? 'Edit meeting details' : 'Create a new meeting with timezone support'}
+        </div>
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Meeting Title */}
             <FormField
               control={form.control}
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Meeting Title *</FormLabel>
+                  <FormLabel className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Meeting Title
+                  </FormLabel>
                   <FormControl>
                     <Input placeholder="Enter meeting title" {...field} />
                   </FormControl>
@@ -254,101 +483,250 @@ export const MeetingForm = ({ onSuccess, onCancel, editingMeeting }: MeetingForm
               )}
             />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Timezone and Duration Row */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Timezone Selection */}
               <FormField
                 control={form.control}
-                name="startDateTime"
+                name="timezone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      Start Date & Time *
+                    <FormLabel className="flex items-center gap-2 h-5">
+                      <Globe className="h-4 w-4" />
+                      Timezone
                     </FormLabel>
-                    <FormControl>
-                      <Input type="datetime-local" {...field} />
-                    </FormControl>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select timezone" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="max-h-[200px]">
+                        {IANA_TIMEZONES.map((tz) => (
+                          <SelectItem key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
+              {/* Duration Selection */}
               <FormField
                 control={form.control}
-                name="endDateTime"
+                name="duration"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      End Date & Time *
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="datetime-local" {...field} />
-                    </FormControl>
+                    <FormLabel className="h-5 flex items-center">Duration</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select duration" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {durationOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
 
+            {/* Date and Time Row */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Date Selection */}
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel className="flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4" />
+                      Date
+                    </FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "PPP")
+                            ) : (
+                              <span>Pick a date</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date < new Date(new Date().setHours(0, 0, 0, 0))
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Time Selection */}
+              <FormField
+                control={form.control}
+                name="startTime"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Time
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select time" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="max-h-[200px]">
+                        {availableTimeSlots.map((time) => (
+                          <SelectItem key={time} value={time}>
+                            {time}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+
+            {/* Conflict Warning */}
+            {conflictWarning && (
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-800">
+                  {conflictWarning}
+                  {suggestedSlot && (
+                    <div className="mt-2">
+                      <p className="text-sm">
+                        Suggested next available slot: {format(suggestedSlot.date, 'MMM dd')} at {suggestedSlot.time}
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSuggestedSlotAccept}
+                        className="mt-1"
+                      >
+                        Use suggested slot
+                      </Button>
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Participant Selection */}
             <FormField
               control={form.control}
-              name="participants"
-              render={() => (
-                <FormItem>
-                  <FormLabel className="flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Participants *
-                  </FormLabel>
-                  <FormControl>
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Enter email address"
-                          value={participantInput}
-                          onChange={(e) => setParticipantInput(e.target.value)}
-                          onKeyPress={handleKeyPress}
-                        />
-                        <Button type="button" onClick={addParticipant} variant="outline">
-                          Add
+              name="participant"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>Participant</FormLabel>
+                  <Popover open={participantOpen} onOpenChange={setParticipantOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            "w-full justify-between",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value
+                            ? (() => {
+                                const lead = availableLeads.find(l => l.id === field.value);
+                                return lead ? `${lead.lead_name} (${lead.email})` : field.value;
+                              })()
+                            : "Select participant"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {participants.map((email) => (
-                          <div
-                            key={email}
-                            className="flex items-center gap-1 bg-secondary text-secondary-foreground px-2 py-1 rounded-md text-sm"
-                          >
-                            {email}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                              onClick={() => removeParticipant(email)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </FormControl>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0">
+                      <Command>
+                        <CommandInput placeholder="Search participants..." />
+                        <CommandEmpty>No participant found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandList>
+                            {availableLeads.map((lead) => (
+                              <CommandItem
+                                value={`${lead.lead_name} ${lead.email}`}
+                                key={lead.id}
+                                onSelect={() => {
+                                  form.setValue("participant", lead.id);
+                                  setParticipantOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    lead.id === field.value
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                <div>
+                                  <div className="font-medium">{lead.lead_name}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {lead.email} • {lead.company_name}
+                                  </div>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandList>
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            {/* Description */}
             <FormField
               control={form.control}
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description</FormLabel>
+                  <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      placeholder="Meeting agenda or description" 
-                      className="min-h-[100px]"
-                      {...field} 
+                    <Textarea
+                      placeholder="Enter meeting description..."
+                      className="min-h-[80px]"
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -356,17 +734,36 @@ export const MeetingForm = ({ onSuccess, onCancel, editingMeeting }: MeetingForm
               )}
             />
 
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={onCancel}>
+            {/* Preview */}
+            {watchedDate && watchedTime && watchedTimezone && watchedDuration && (
+              <div className="rounded-lg border bg-muted/50 p-3">
+                <div className="text-sm font-medium">Meeting Preview:</div>
+                <div className="text-sm text-muted-foreground">
+                  {(() => {
+                    try {
+                      const duration = parseInt(watchedDuration);
+                      const { utcStart } = convertLocalToUTC(watchedDate, watchedTime, watchedTimezone);
+                      return formatDateTimeWithTimezone(utcStart, watchedTimezone, duration);
+                    } catch {
+                      return 'Invalid time selection';
+                    }
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Form Actions */}
+            <div className="flex justify-end space-x-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || !!conflictWarning}>
                 {isSubmitting ? 'Saving...' : editingMeeting ? 'Update Meeting' : 'Create Meeting'}
               </Button>
             </div>
           </form>
         </Form>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   );
 };
