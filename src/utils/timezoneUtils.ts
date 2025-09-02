@@ -59,8 +59,8 @@ export const IANA_TIMEZONES = [
   label: generateTimezoneDisplay(tz.value)
 }));
 
-// Default timezone (EET)
-export const DEFAULT_TIMEZONE = 'Europe/Athens';
+// Default timezone (UTC+02:00)
+export const DEFAULT_TIMEZONE = 'Europe/Berlin';
 
 /**
  * Get the browser's IANA timezone
