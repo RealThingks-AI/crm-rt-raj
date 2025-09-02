@@ -1,21 +1,52 @@
 import { fromZonedTime, toZonedTime, format } from 'date-fns-tz';
 import { format as formatDate, addMinutes, isAfter } from 'date-fns';
 
-// IANA timezone options for the form with formatted display
+/**
+ * Generate timezone display string in format: UTC±HH:MM (Abbreviation)
+ */
+export const generateTimezoneDisplay = (timezone: string): string => {
+  try {
+    const now = new Date();
+    
+    // Get the offset using a reliable method
+    const tempDate = new Date(now.toLocaleString('sv-SE', { timeZone: timezone }));
+    const utcDate = new Date(now.toLocaleString('sv-SE', { timeZone: 'UTC' }));
+    
+    // Calculate offset in minutes
+    const offsetMs = tempDate.getTime() - utcDate.getTime();
+    const offsetMinutes = Math.round(offsetMs / (1000 * 60));
+    const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+    const remainingMinutes = Math.abs(offsetMinutes) % 60;
+    const sign = offsetMinutes >= 0 ? '+' : '-';
+    
+    // Get timezone abbreviation
+    const abbr = new Intl.DateTimeFormat('en', {
+      timeZone: timezone,
+      timeZoneName: 'short'
+    }).formatToParts(now).find(part => part.type === 'timeZoneName')?.value || 'UTC';
+    
+    return `UTC${sign}${offsetHours.toString().padStart(2, '0')}:${remainingMinutes.toString().padStart(2, '0')} (${abbr})`;
+  } catch (error) {
+    console.error('Error generating timezone display:', error);
+    return timezone;
+  }
+};
+
+// IANA timezone options for the form with current offset display
 export const IANA_TIMEZONES = [
   { label: 'UTC-10:00 (HST)', value: 'Pacific/Honolulu' },
   { label: 'UTC-09:00 (AKST)', value: 'America/Anchorage' },
-  { label: 'UTC-08:00 (PST)', value: 'America/Los_Angeles' },
-  { label: 'UTC-07:00 (MST)', value: 'America/Denver' },
-  { label: 'UTC-06:00 (CST)', value: 'America/Chicago' },
-  { label: 'UTC-05:00 (EST)', value: 'America/New_York' },
-  { label: 'UTC-04:00 (AST)', value: 'America/Halifax' },
-  { label: 'UTC-03:30 (NST)', value: 'America/St_Johns' },
+  { label: 'UTC-08:00 (PDT)', value: 'America/Los_Angeles' },
+  { label: 'UTC-07:00 (MDT)', value: 'America/Denver' },
+  { label: 'UTC-06:00 (CDT)', value: 'America/Chicago' },
+  { label: 'UTC-05:00 (EDT)', value: 'America/New_York' },
+  { label: 'UTC-04:00 (ADT)', value: 'America/Halifax' },
+  { label: 'UTC-03:30 (NDT)', value: 'America/St_Johns' },
   { label: 'UTC-03:00 (BRT)', value: 'America/Sao_Paulo' },
-  { label: 'UTC+00:00 (GMT)', value: 'Europe/London' },
-  { label: 'UTC+01:00 (CET)', value: 'Europe/Paris' },
-  { label: 'UTC+01:00 (CET)', value: 'Europe/Berlin' },
-  { label: 'UTC+02:00 (EET)', value: 'Europe/Athens' },
+  { label: 'UTC+01:00 (BST)', value: 'Europe/London' },
+  { label: 'UTC+02:00 (CEST)', value: 'Europe/Paris' },
+  { label: 'UTC+02:00 (CEST)', value: 'Europe/Berlin' },
+  { label: 'UTC+03:00 (EEST)', value: 'Europe/Athens' },
   { label: 'UTC+03:00 (MSK)', value: 'Europe/Moscow' },
   { label: 'UTC+04:00 (GST)', value: 'Asia/Dubai' },
   { label: 'UTC+05:30 (IST)', value: 'Asia/Kolkata' },
@@ -23,7 +54,10 @@ export const IANA_TIMEZONES = [
   { label: 'UTC+09:00 (JST)', value: 'Asia/Tokyo' },
   { label: 'UTC+11:00 (AEDT)', value: 'Australia/Sydney' },
   { label: 'UTC+13:00 (NZDT)', value: 'Pacific/Auckland' },
-];
+].map(tz => ({
+  ...tz,
+  label: generateTimezoneDisplay(tz.value)
+}));
 
 // Default timezone (EET)
 export const DEFAULT_TIMEZONE = 'Europe/Athens';
@@ -109,36 +143,6 @@ export const formatDateTimeWithTimezone = (
   return `${formattedDate} · ${timeString} - ${endTimeString} (${timezoneAbbr})`;
 };
 
-/**
- * Generate timezone display string in format: UTC±HH:MM (Abbreviation)
- */
-export const generateTimezoneDisplay = (timezone: string): string => {
-  try {
-    const now = new Date();
-    
-    // Get the offset using a reliable method
-    const tempDate = new Date(now.toLocaleString('sv-SE', { timeZone: timezone }));
-    const utcDate = new Date(now.toLocaleString('sv-SE', { timeZone: 'UTC' }));
-    
-    // Calculate offset in minutes
-    const offsetMs = tempDate.getTime() - utcDate.getTime();
-    const offsetMinutes = Math.round(offsetMs / (1000 * 60));
-    const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
-    const remainingMinutes = Math.abs(offsetMinutes) % 60;
-    const sign = offsetMinutes >= 0 ? '+' : '-';
-    
-    // Get timezone abbreviation
-    const abbr = new Intl.DateTimeFormat('en', {
-      timeZone: timezone,
-      timeZoneName: 'short'
-    }).formatToParts(now).find(part => part.type === 'timeZoneName')?.value || 'UTC';
-    
-    return `UTC${sign}${offsetHours.toString().padStart(2, '0')}:${remainingMinutes.toString().padStart(2, '0')} (${abbr})`;
-  } catch (error) {
-    console.error('Error generating timezone display:', error);
-    return timezone;
-  }
-};
 
 /**
  * Get next available time slot (30-minute intervals)
