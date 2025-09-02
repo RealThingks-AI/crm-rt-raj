@@ -115,22 +115,25 @@ export const formatDateTimeWithTimezone = (
 export const generateTimezoneDisplay = (timezone: string): string => {
   try {
     const now = new Date();
-    const utcTime = now.getTime();
-    const localTime = new Date(now.toLocaleString("en-US", { timeZone: timezone })).getTime();
-    const offsetMs = localTime - utcTime;
-    const offsetHours = Math.floor(Math.abs(offsetMs) / (1000 * 60 * 60));
-    const offsetMinutes = Math.floor((Math.abs(offsetMs) % (1000 * 60 * 60)) / (1000 * 60));
-    const sign = offsetMs >= 0 ? '+' : '-';
+    
+    // Get the offset using a reliable method
+    const tempDate = new Date(now.toLocaleString('sv-SE', { timeZone: timezone }));
+    const utcDate = new Date(now.toLocaleString('sv-SE', { timeZone: 'UTC' }));
+    
+    // Calculate offset in minutes
+    const offsetMs = tempDate.getTime() - utcDate.getTime();
+    const offsetMinutes = Math.round(offsetMs / (1000 * 60));
+    const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+    const remainingMinutes = Math.abs(offsetMinutes) % 60;
+    const sign = offsetMinutes >= 0 ? '+' : '-';
     
     // Get timezone abbreviation
-    const formatter = new Intl.DateTimeFormat('en', {
+    const abbr = new Intl.DateTimeFormat('en', {
       timeZone: timezone,
       timeZoneName: 'short'
-    });
-    const parts = formatter.formatToParts(now);
-    const abbr = parts.find(part => part.type === 'timeZoneName')?.value || timezone.split('/').pop()?.replace('_', ' ') || 'UTC';
+    }).formatToParts(now).find(part => part.type === 'timeZoneName')?.value || 'UTC';
     
-    return `UTC${sign}${offsetHours.toString().padStart(2, '0')}:${offsetMinutes.toString().padStart(2, '0')} (${abbr})`;
+    return `UTC${sign}${offsetHours.toString().padStart(2, '0')}:${remainingMinutes.toString().padStart(2, '0')} (${abbr})`;
   } catch (error) {
     console.error('Error generating timezone display:', error);
     return timezone;
